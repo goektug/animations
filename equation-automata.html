@@ -467,7 +467,9 @@ function step() {
           if (l === 1 && (m>1||n>1))   nc[idx(x-1,(y+z+L)%L)] = 0;
         }
         // Neumann rule
-        if (h >= vnThresh) {
+// Neumann rule
+        const effectiveVnThresh = (vnThresh === 6) ? 1 : vnThresh;
+        if ((h + cell) >= effectiveVnThresh) {
           nc[idx(x,y)] = g <= mThresh ? 1 : 0;
         }
         // Coupling
