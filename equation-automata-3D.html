@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>3D Equation Automata</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap');
+
+  :root {
+    --bg:       #0c0c10;
+    --surface:  #13131a;
+    --border:   #2a2a38;
+    --gold:     #c8a96e;
+    --teal:     #5fb3a1;
+    --dim:      #5a5a72;
+    --text:     #e2ddd4;
+    --subtext:  #9994a0;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 40px;
+    overflow-x: hidden;
+  }
+
+  header {
+    width: 100%;
+    max-width: 1040px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 18px;
+  }
+
+  header h1 {
+    font-family: 'EB Garamond', serif;
+    font-size: 2.2rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    color: var(--gold);
+    line-height: 1.1;
+  }
+
+  header p {
+    font-size: 0.65rem;
+    color: var(--dim);
+    margin-top: 6px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  .layout {
+    width: 100%;
+    max-width: 1040px;
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 20px;
+  }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  /* ── 3D Viewports ── */
+  .view-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .canvas-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+    height: 520px;
+    width: 100%;
+  }
+
+  #webgl-container {
+    width: 100%;
+    height: 100%;
+  }
+
+  .canvas-overlay {
+    position: absolute;
+    top: 12px;
+    left: 14px;
+    font-size: 0.62rem;
+    color: var(--subtext);
+    letter-spacing: 0.1em;
+    pointer-events: none;
+    background: rgba(19, 19, 26, 0.75);
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    z-index: 10;
+  }
+
+  .step-counter {
+    position: absolute;
+    bottom: 12px;
+    right: 14px;
+    font-size: 0.62rem;
+    color: var(--gold);
+    letter-spacing: 0.1em;
+    pointer-events: none;
+    background: rgba(19, 19, 26, 0.75);
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    z-index: 10;
+  }
+
+  /* Slider control for slice visualization */
+  .slice-control-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .slice-control-panel label {
+    margin-bottom: 0;
+    white-space: nowrap;
+    min-width: 90px;
+    font-size: 0.65rem;
+    color: var(--subtext);
+  }
+
+  input[type="range"] {
+    flex: 1;
+    accent-color: var(--gold);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    height: 6px;
+    cursor: pointer;
+  }
+
+  /* ── Side panel ── */
+  .side-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 14px;
+  }
+
+  .card-title {
+    font-size: 0.55rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  label {
+    display: block;
+    font-size: 0.6rem;
+    color: var(--subtext);
+    margin-bottom: 4px;
+    letter-spacing: 0.08em;
+  }
+
+  select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    padding: 7px 10px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%235a5a72'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+  }
+
+  select:focus { outline: 1px solid var(--gold); }
+  select option { background: #13131a; }
+
+  .btn-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  button {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--subtext);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.58rem;
+    padding: 7px 10px;
+    cursor: pointer;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+
+  button:hover { border-color: var(--gold); color: var(--gold); }
+  button.active { border-color: var(--teal); color: var(--teal); background: #5fb3a108; }
+  button.danger:hover { border-color: #c85a5a; color: #c85a5a; }
+
+  /* ── Stats ── */
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 5px 0;
+    border-bottom: 1px solid #1e1e28;
+  }
+
+  .stat-row:last-child { border-bottom: none; }
+
+  .stat-label {
+    font-size: 0.58rem;
+    color: var(--dim);
+    letter-spacing: 0.08em;
+  }
+
+  .stat-val {
+    font-size: 0.65rem;
+    color: var(--gold);
+    font-weight: 500;
+  }
+
+  .stat-val.teal { color: var(--teal); }
+
+  /* ── Formula bar ── */
+  .formula-bar {
+    width: 100%;
+    max-width: 1040px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    margin-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .formula-bar span {
+    font-size: 0.6rem;
+    color: var(--dim);
+    letter-spacing: 0.06em;
+  }
+
+  .formula-bar .eq { color: var(--teal); }
+  .formula-bar .val { color: var(--gold); }
+
+  .phase-dot {
+    display: inline-block;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+  }
+
+  #sparkline {
+    width: 100%;
+    height: 40px;
+    display: block;
+    margin-top: 8px;
+  }
+
+  .parity-notice {
+    width: 100%;
+    max-width: 1040px;
+    margin-top: 16px;
+    padding: 10px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: #9994a0;
+    font-size: 0.62rem;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+<header>
+  <h1>3D Equation Automata</h1>
+  <p>3D Moore Lattice · WebGL Instanced Architecture · Periodic Boundaries</p>
+</header>
+
+<div class="layout">
+
+  <div class="view-container">
+    <div class="canvas-panel">
+      <div id="webgl-container"></div>
+      <div class="canvas-overlay" id="overlay-p">p = —</div>
+      <div class="step-counter" id="step-counter">step 0</div>
+    </div>
+
+    <div class="slice-control-panel">
+      <label id="slice-label">Slice View: All</label>
+      <input type="range" id="slice-slider" min="-1" max="31" value="-1">
+    </div>
+  </div>
+
+  <div class="side-panel">
+
+    <div class="card">
+      <div class="card-title">Lattice & Parameters</div>
+      
+      <label>Grid Size (L)</label>
+      <select id="sel-l">
+        <option value="32" selected>32³ (Recommended, Faster)</option>
+        <option value="40">40³ (Balanced)</option>
+        <option value="48">48³ (Dense / High-End)</option>
+      </select>
+
+      <label>Initial Probability p₀</label>
+      <select id="sel-p">
+        <option value="crit3d" selected>6 / 27 ≈ 0.22222 [3D Critical Limit]</option>
+        <option value="one_third">1 / 3 ≈ 0.33333 [Antiferromagnetic Point]</option>
+        <option value="two_third">2 / 3 ≈ 0.66667 [Ferromagnetic Point]</option>
+        <option value="cos2">cos²(π/8) ≈ 0.85355 [2D Parameter]</option>
+      </select>
+
+      <label>Von Neumann threshold (h)</label>
+      <select id="sel-vn">
+        <option value="1">h ≥ 1</option>
+        <option value="2">h ≥ 2</option>
+        <option value="3" selected>h ≥ 3 [3D Correct Scaling]</option>
+        <option value="4">h ≥ 4</option>
+      </select>
+
+      <label>Moore threshold (g)</label>
+      <select id="sel-moore">
+        <option value="12">g ≤ 12</option>
+        <option value="16">g ≤ 16</option>
+        <option value="18" selected>g ≤ 18 [3D Critical Limit]</option>
+        <option value="20">g ≤ 20</option>
+      </select>
+
+      <div class="btn-row">
+        <button id="btn-play" class="active">PAUSE</button>
+        <button id="btn-reset" class="danger">RESET</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Live Statistics</div>
+
+      <div class="stat-row">
+        <span class="stat-label">Step</span>
+        <span class="stat-val" id="st-step">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Alive (count₁)</span>
+        <span class="stat-val" id="st-alive">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Alive fraction</span>
+        <span class="stat-val" id="st-frac">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">3D Vector output</span>
+        <span class="stat-val teal" id="st-tan">—</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Phase</span>
+        <span class="stat-val" id="st-phase">—</span>
+      </div>
+
+      <canvas id="sparkline"></canvas>
+    </div>
+
+    <div class="card">
+      <div class="card-title">3D Geometrical Scale</div>
+      <div class="stat-row">
+        <span class="stat-label">Max Moore</span>
+        <span class="stat-val">26 Neighbors</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Full Element Cube</span>
+        <span class="stat-val">27 Cells</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Direction Plane</span>
+        <span class="stat-val">3 × 3 = 9 Cells</span>
+      </div>
+    </div>
+
+  </div> </div>
+
+<div class="parity-notice">
+  Python parity mode enabled — rules now match <code>equation-3D-2.py</code> exactly.<br>
+  Observed alive fraction should now more closely reproduce the original Python convergence behavior because nc is no longer cleared between steps, matching equation-3D-2.py exactly.
+</div>
+
+<div class="formula-bar">
+  <span>Coupling: <span class="eq">g/27 &gt; (1−p)·p</span></span>
+  <span>Target Density: <span class="val">6/27 ≈ 0.22222</span></span>
+  <span>Quadratic Bridge: <span class="eq">p² − p + 6/27 = 0</span></span>
+  <span>Exact 3D Roots: <span class="val">1/3</span> , <span class="val">2/3</span></span>
+</div>
+
+<script>
+// ─── Mathematical Constants ──────────────────────────────────────────────────
+const P_MAP = {
+  crit3d: 6 / 27,
+  one_third: 1 / 3,
+  two_third: 2 / 3,
+  cos2: 0.5 + 1 / (2 * Math.sqrt(2))
+};
+
+// ─── Simulation States ───────────────────────────────────────────────────────
+let L = 32; 
+let c, nc;
+let slope0 = [], slope1 = [], delta = [];
+let stepCount = 0;
+let running = true;
+let tanHistory = [];
+let o = 0;
+
+let p = P_MAP.crit3d;
+let vnThresh = 3;
+let mThresh = 18;
+let currentSlice = -1; 
+
+// ─── Three.js Setup Elements ─────────────────────────────────────────────────
+let scene, camera, renderer, controls;
+let instancedMesh;
+let dummy = new THREE.Object3D();
+let container = document.getElementById('webgl-container');
+let spark = document.getElementById('sparkline');
+let sctx = spark.getContext('2d');
+
+function idx(x, y, q) {
+  return x * L * L + y * L + q;
+}
+
+// ─── Initialize Engine & WebGL ────────────────────────────────────────────────
+function initSimulation() {
+  L = parseInt(document.getElementById('sel-l').value);
+  
+  const slider = document.getElementById('slice-slider');
+  slider.max = L - 1;
+  if (currentSlice >= L) currentSlice = -1;
+  slider.value = currentSlice;
+  updateSliceLabel();
+
+  c = new Uint8Array(L * L * L);
+  nc = new Uint8Array(L * L * L);
+  slope0 = []; slope1 = []; delta = [];
+  o = 0;
+  stepCount = 0;
+  tanHistory = [];
+
+  let initialAlive = 0;
+  for (let i = 0; i < L * L * L; i++) {
+    c[i] = Math.random() < p ? 1 : 0;
+    if (c[i]) initialAlive++;
+  }
+
+  document.getElementById('overlay-p').textContent = `p = ${p.toFixed(6)}`;
+  updateStats(initialAlive, L * L * L, null);
+
+  build3DGrid();
+  update3DView();
+  drawSparkline();
+}
+
+function build3DGrid() {
+  if (instancedMesh) scene.remove(instancedMesh);
+
+  const geometry = new THREE.BoxGeometry(0.85, 0.85, 0.85);
+  const material = new THREE.MeshPhongMaterial({
+    color: 0xc8a96e,
+    shininess: 40,
+    flatShading: true
+  });
+
+  instancedMesh = new THREE.InstancedMesh(geometry, material, L * L * L);
+  instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  scene.add(instancedMesh);
+}
+
+// ─── Core Mathematical 3D Neighborhood Sweeps ─────────────────────────────────
+function number_of_Moore_neighbors(x, y, q) {
+  let count = 0;
+  for (let dx = -1; dx <= 1; dx++) {
+    let nx = (x + dx + L) % L;
+    for (let dy = -1; dy <= 1; dy++) {
+      let ny = (y + dy + L) % L;
+      for (let dq = -1; dq <= 1; dq++) {
+        count += c[idx(nx, ny, (q + dq + L) % L)];
+      }
+    }
+  }
+  return count - c[idx(x, y, q)];
+}
+
+function number_of_upper_neighbors(x, y, q) {
+  let count = 0;
+  let ny = (y + 1) % L;
+  for (let dx = -1; dx <= 1; dx++) {
+    let nx = (x + dx + L) % L;
+    for (let dq = -1; dq <= 1; dq++) {
+      count += c[idx(nx, ny, (q + dq + L) % L)];
+    }
+  }
+  return count;
+}
+
+function number_of_lower_neighbors(x, y, q) {
+  let count = 0;
+  let ny = (y - 1 + L) % L;
+  for (let dx = -1; dx <= 1; dx++) {
+    let nx = (x + dx + L) % L;
+    for (let dq = -1; dq <= 1; dq++) {
+      count += c[idx(nx, ny, (q + dq + L) % L)];
+    }
+  }
+  return count;
+}
+
+function number_of_right_neighbors(x, y, q) {
+  let count = 0;
+  let nx = (x + 1) % L;
+  for (let dy = -1; dy <= 1; dy++) {
+    let ny = (y + dy + L) % L;
+    for (let dq = -1; dq <= 1; dq++) {
+      count += c[idx(nx, ny, (q + dq + L) % L)];
+    }
+  }
+  return count;
+}
+
+function number_of_left_neighbors(x, y, q) {
+  let count = 0;
+  let nx = (x - 1 + L) % L;
+  for (let dy = -1; dy <= 1; dy++) {
+    let ny = (y + dy + L) % L;
+    for (let dq = -1; dq <= 1; dq++) {
+      count += c[idx(nx, ny, (q + dq + L) % L)];
+    }
+  }
+  return count;
+}
+
+function number_of_Neumann_neighbors(x, y, q) {
+  return c[idx((x + 1) % L, y, q)] + c[idx((x - 1 + L) % L, y, q)] +
+         c[idx(x, (y + 1) % L, q)] + c[idx(x, (y - 1 + L) % L, q)] +
+         c[idx(x, y, (q + 1) % L)] + c[idx(x, y, (q - 1 + L) % L)];
+}
+
+// ─── 3D Simulation Vector Engine Step ─────────────────────────────────────────
+function step() {
+  let count0 = 0;
+  let count1 = 0;
+  let i = 0;
+  let j = 0;
+
+  for (let x = 0; x < L; x++) {
+    for (let y = 0; y < L; y++) {
+      for (let q = 0; q < L; q++) {
+        let currentIdx = idx(x, y, q);
+        let g = number_of_Moore_neighbors(x, y, q);
+
+        j += g;
+        i++;
+
+        if (c[currentIdx] === 0) {
+          nc[currentIdx] = (g <= mThresh) ? 0 : 1;
+          count0++;
+        } else {
+          count1++;
+
+          let m = number_of_upper_neighbors(x, y, q);
+          let n = number_of_lower_neighbors(x, y, q);
+          let k = number_of_right_neighbors(x, y, q);
+          let l = number_of_left_neighbors(x, y, q);
+          let h = number_of_Neumann_neighbors(x, y, q);
+
+          let gp = g / 27;
+          let th = (1 - p) * p;
+
+          for (let z = -1; z <= 1; z++) {
+            if (m === 3) nc[idx(x, (y + 1) % L, q)] = 1;
+            if (n === 3) nc[idx(x, (y - 1 + L) % L, q)] = 1;
+            if (k === 3 && (m <= 3 || n <= 3)) nc[idx((x + 1) % L, (y + z + L) % L, q)] = 1;
+            if (l === 3 && (m > 3 || n > 3)) nc[idx((x - 1 + L) % L, (y + z + L) % L, q)] = 0;
+            if (h >= vnThresh) nc[currentIdx] = (g <= mThresh) ? 1 : 0;
+
+            if (gp > th) {
+              nc[idx((x + 1) % L, y, q)] = 1;
+            } else if (gp < th) {
+              nc[idx((x - 1 + L) % L, y, q)] = 1;
+            } else {
+              nc[currentIdx] = 1;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  let temp = c; c = nc; nc = temp;
+
+  slope0.push(count0);
+  slope1.push(count1);
+  delta.push(j);
+
+  o = slope0.length;
+  let tanOut = null;
+
+  if (o > 1 && count0 > 0 && count1 > 0) {
+    let ratio = count0 / count1;
+    let ratio0 = j / i;
+    let ratio1 = ratio0 / ratio;
+    let ratio2 = (slope0[o - 1] / slope1[o - 1]) - (slope0[o - 2] / slope1[o - 2]);
+    let ratio3 = (delta[o - 2] - delta[o - 1]) / i;
+
+    if (ratio1 !== 0 && ratio1 !== 1) {
+      tanOut = ratio3 / (ratio1 * ratio1) + (1 / ratio1) - ratio2;
+      tanHistory.push(tanOut);
+      if (tanHistory.length > 60) tanHistory.shift();
+    }
+  }
+
+  stepCount++;
+  updateStats(count1, L * L * L, tanOut);
+}
+
+// ─── Render Viewport Computations ────────────────────────────────────────────
+function update3DView() {
+  let meshIndex = 0;
+  const offset = (L - 1) / 2;
+
+  for (let x = 0; x < L; x++) {
+    for (let y = 0; y < L; y++) {
+      for (let q = 0; q < L; q++) {
+        let isAlive = c[idx(x, y, q)] === 1;
+        
+        if (currentSlice !== -1 && q !== currentSlice) {
+          isAlive = false;
+        }
+
+        if (isAlive) {
+          dummy.position.set(x - offset, y - offset, q - offset);
+          dummy.updateMatrix();
+          instancedMesh.setMatrixAt(meshIndex, dummy.matrix);
+        } else {
+          dummy.position.set(9999, 9999, 9999);
+          dummy.updateMatrix();
+          instancedMesh.setMatrixAt(meshIndex, dummy.matrix);
+        }
+        meshIndex++;
+      }
+    }
+  }
+  instancedMesh.instanceMatrix.needsUpdate = true;
+}
+
+// ─── Setup WebGL Scene ───────────────────────────────────────────────────────
+function initWebGL() {
+  // Use explicit fallback matching CSS panels if client flow values aren't initialized yet
+  const width = container.clientWidth || 720;
+  const height = container.clientHeight || 520;
+
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0c0c10); 
+
+  camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+  camera.position.set(L * 1.2, L * 1.2, L * 1.6);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(width, height);
+  container.appendChild(renderer.domElement);
+
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+
+  const ambientLight = new THREE.AmbientLight(0x222233);
+  scene.add(ambientLight);
+
+  const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+  dirLight1.position.set(1, 2, 1).normalize();
+  scene.add(dirLight1);
+
+  const dirLight2 = new THREE.DirectionalLight(0xc8a96e, 0.4);
+  dirLight2.position.set(-1, -1, -1).normalize();
+  scene.add(dirLight2);
+
+  window.addEventListener('resize', onWindowResize);
+  
+  // Forced size calculation pass to override layout setup latency safely
+  setTimeout(onWindowResize, 50);
+}
+
+function onWindowResize() {
+  const width = container.clientWidth;
+  const height = container.clientHeight;
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+  renderer.setSize(width, height);
+}
+
+// ─── Sparklines & Stats Processing ───────────────────────────────────────────
+function drawSparkline() {
+  const W = spark.width = spark.offsetWidth || 240;
+  const H = spark.height = 40;
+  sctx.clearRect(0, 0, W, H);
+
+  if (tanHistory.length < 2) return;
+
+  const mn = Math.min(...tanHistory);
+  const mx = Math.max(...tanHistory);
+  const range = mx - mn || 1;
+
+  sctx.strokeStyle = '#5fb3a1';
+  sctx.lineWidth = 1.2;
+  sctx.beginPath();
+  tanHistory.forEach((v, i) => {
+    const x = (i / (tanHistory.length - 1)) * W;
+    const y = H - ((v - mn) / range) * (H - 4) - 2;
+    i === 0 ? sctx.moveTo(x, y) : sctx.lineTo(x, y);
+  });
+  sctx.stroke();
+}
+
+function phaseLabel(frac) {
+  if (frac > 0.50) return ['ferromagnetic', '#c8a96e'];
+  if (frac > 0.30) return ['ferrimagnetic', '#9a8a5e'];
+  if (frac > 0.15) return ['paramagnetic', '#5fb3a1'];
+  return ['antiferromagnetic', '#7a9fb3'];
+}
+
+function updateStats(count1, total, tanVal) {
+  const frac = count1 / total;
+  document.getElementById('st-step').textContent = stepCount;
+  document.getElementById('st-alive').textContent = count1.toLocaleString();
+  document.getElementById('st-frac').textContent = frac.toFixed(5);
+  document.getElementById('step-counter').textContent = `step ${stepCount}`;
+
+  const tanEl = document.getElementById('st-tan');
+  if (tanVal !== null) {
+    tanEl.textContent = tanVal.toFixed(5);
+  } else {
+    tanEl.textContent = "Computing...";
+  }
+
+  const [label, color] = phaseLabel(frac);
+  const phEl = document.getElementById('st-phase');
+  phEl.innerHTML = `<span class="phase-dot" style="background:${color}"></span>${label}`;
+}
+
+function updateSliceLabel() {
+  const lbl = document.getElementById('slice-label');
+  if (currentSlice === -1) {
+    lbl.textContent = "Slice View: All";
+  } else {
+    lbl.textContent = `Slice View: Z = ${currentSlice}`;
+  }
+}
+
+// ─── Loop & Controls Wireframing ──────────────────────────────────────────────
+let lastTime = 0;
+const INTERVAL = 0; 
+
+function animate(ts) {
+  requestAnimationFrame(animate);
+  if (controls) controls.update(); // Guard against execution race conditions
+
+  if (running && ts - lastTime >= INTERVAL) {
+    lastTime = ts;
+    step();
+    update3DView();
+    drawSparkline();
+  }
+
+  if (renderer && scene && camera) {
+    renderer.render(scene, camera);
+  }
+}
+
+// ─── UI Interactions Events ──────────────────────────────────────────────────
+document.getElementById('btn-play').addEventListener('click', function() {
+  running = !running;
+  this.textContent = running ? 'PAUSE' : 'PLAY';
+  this.classList.toggle('active', running);
+});
+
+document.getElementById('btn-reset').addEventListener('click', () => {
+  initSimulation();
+});
+
+document.getElementById('sel-l').addEventListener('change', () => {
+  initSimulation();
+});
+
+document.getElementById('sel-p').addEventListener('change', function() {
+  p = P_MAP[this.value];
+  document.getElementById('overlay-p').textContent = `p = ${p.toFixed(6)}`;
+  initSimulation();
+});
+
+document.getElementById('sel-vn').addEventListener('change', function() {
+  vnThresh = parseInt(this.value);
+  initSimulation();
+});
+
+document.getElementById('sel-moore').addEventListener('change', function() {
+  mThresh = parseInt(this.value);
+  initSimulation();
+});
+
+document.getElementById('slice-slider').addEventListener('input', function() {
+  currentSlice = parseInt(this.value);
+  updateSliceLabel();
+  update3DView();
+});
+
+// Start Runtime
+initWebGL();
+initSimulation();
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
